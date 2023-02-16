@@ -3,6 +3,7 @@ import datetime
 import pickle
 import socket
 
+from util import LOOPBACK_DEVICE, get_ipmreqn
 import messages
 
 MESSAGE_WAIT_TIME = datetime.timedelta(milliseconds=500)
@@ -15,6 +16,15 @@ class GameClient:
     def __init__(self, addr):
         self.move_servers = addr
         self.sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+
+        ip, _ = addr
+        if is_multicast(ip):
+            # don't send multicast packets outside of local network
+            self.sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_TTL, 1)
+            # make sure the multicast packets are sent over the loopback device
+            ipmreqn = get_ipmreqn(ip, '127.0.0.1', LOOPBACK_DEVICE)
+            self.sock.setsockopt(socket.SOL_IP, socket.IP_MULTICAST_IF, ipmreqn)
+
 
     def get_moves(self):
         move_request = messages.MoveRequest(
@@ -44,6 +54,10 @@ class GameClient:
             # todo: else?? we got an old move so we should just discard it but maybe log
         return moves
 
+
+def is_multicast(ip):
+    parts = [int(b) for b in ip.split('.')]
+    return 224 <= parts[0] <= 239
 
 
 if __name__ == '__main__':
